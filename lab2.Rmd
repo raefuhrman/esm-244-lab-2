@@ -1,0 +1,120 @@
+---
+title: "esm_lab2"
+author: "Rae Fuhrman"
+date: "1/17/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+library(tidyverse)
+library(janitor)
+library(MASS)
+library(ggrepel)
+library(RColorBrewer)
+library(factoextra)
+library(ggbiplot)
+library(shinythemes)
+
+```
+
+If you want to override or set a function manually throughout a workspace assign the function name explicitly ::
+
+```{r force r to use select from dplyr}
+
+select <- dplyr::select
+
+```
+
+###1. Ordinal logistic regression for political party affiliation by age ethnicty and sex
+
+```{r}
+
+pol_party <- read_csv("pol_party.csv") %>% 
+  clean_names() %>%  #with janitor loaded changes all names to snake case
+  select(participant_id:read_carefully)
+
+#a little more wrangling
+
+pol_df <- pol_party %>% 
+  select(birth_year, gender, ethnicity, political_party) %>% 
+  filter(birth_year>1900, political_party != "NA", political_party <=7) %>% 
+  mutate(age=2016-birth_year)
+
+#political party: 1=very liberal 7=very conservative
+
+#when doing OLR we want our dependent variable to be of class ORDERED FACTOR
+pol_df$political_party <- factor(pol_df$political_party, ordered = TRUE, levels = c("1", "2", "3", "4", "5", "6", "7")) #coerce the class of data in the political party column
+
+#update our categorical predictor variables to factors too
+
+pol_df$ethnicity <- factor(pol_df$ethnicity)
+pol_df$gender <- factor(pol_df$gender)
+
+```
+
+Basic data exploration and visualization:
+
+```{r}
+counts_eth <- pol_df %>% 
+  group_by(ethnicity, political_party) %>% 
+  tally() #tally awesome with group by because you can group by as many variables as you want and then figure out how many responses you have for each 
+
+counts_g <- pol_df %>% 
+  group_by(gender, political_party) %>% 
+  tally()
+
+ggplot(pol_df, aes(x=political_party))+
+  geom_histogram(aes(fill=ethnicity), stat="count")+
+  scale_fill_brewer(palette = "YlGrBu")+
+  facet_wrap(~ethnicity, scales="free")
+```
+
+```{r}
+
+pol_model <- polr(political_party ~ age+gender+ethnicity, data=pol_df)
+summary(pol_model)
+exp(coef(pol_model))
+
+###
+
+#once we decide on a model we can always make predictions using it
+
+predictions <- predict(pol_model, type="probs") 
+
+df <- data.frame(pol_df, predictions)
+```
+
+###2. PCA Using worldbank environmental indicators
+
+```{r}
+wb_10 <- read_csv("wb_10.csv") %>% 
+  select(-X1) %>% 
+  column_to_rownames('code')
+
+wb_pca <- prcomp(wb_10[3:8], scale = TRUE)
+summary(wb_pca)
+
+ggbiplot(wb_pca, groups = wb_10$region)+
+  geom_text_repel(label = rownames(wb_10), size=2, segment.size=0.2)+
+  theme_bw()
+
+#factoextra package, screeplot 
+
+fviz_screeplot(wb_pca)
+
+fviz_contrib(wb_pca, choice="var", axes=1, top=6)
+
+# biplot showing points and vectors
+fviz_pca_biplot(wb_pca, col.var = "cos2", label="var", repel = TRUE)#higher the cos2 value is the better the variable is represented
+
+```
+
+
+
+
+
